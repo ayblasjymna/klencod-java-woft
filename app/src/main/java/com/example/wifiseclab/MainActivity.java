@@ -6,6 +6,7 @@ import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
 import android.view.Gravity;
+import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.LinearLayout;
@@ -26,6 +27,7 @@ public class MainActivity extends AppCompatActivity {
     private List<String> networkNames;
     private ProgressBar mainProgressBar;
 
+    // شبكات تجريبية (محاكاة فقط): الاسم، العنوان، التشفير، كلمة المرور
     private final String[][] mockNetworks = {
         {"Home_Network_5G", "A1:B2:C3:D4:E5:F6", "WPA2", "password123"},
         {"CoffeeShop_Guest", "12:34:56:78:9A:BC", "WPA2", "admin"},
@@ -41,6 +43,7 @@ public class MainActivity extends AppCompatActivity {
         rootLayout.setOrientation(LinearLayout.VERTICAL);
         rootLayout.setBackgroundColor(Color.parseColor("#0F0F13"));
         rootLayout.setPadding(30, 30, 30, 30);
+        rootLayout.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
 
         TextView title = new TextView(this);
         title.setText("محطة فحص وأمان الويفاي");
@@ -58,7 +61,7 @@ public class MainActivity extends AppCompatActivity {
 
         mainProgressBar = new ProgressBar(this, null, android.R.attr.progressBarStyleHorizontal);
         mainProgressBar.setIndeterminate(true);
-        mainProgressBar.setVisibility(ProgressBar.GONE);
+        mainProgressBar.setVisibility(View.GONE);
         rootLayout.addView(mainProgressBar);
 
         listViewNetworks = new ListView(this);
@@ -70,24 +73,24 @@ public class MainActivity extends AppCompatActivity {
         adapter = new ArrayAdapter<>(this, android.R.layout.simple_list_item_1, networkNames);
         listViewNetworks.setAdapter(adapter);
 
-        btnScan.v.setOnClickListener(v -> startNetworkScan()); // تم ضبطه ليعمل مباشرة
-
         btnScan.setOnClickListener(v -> startNetworkScan());
 
         listViewNetworks.setOnItemClickListener((parent, view, position, id) -> {
-            String[] selectedNet = mockNetworks[position];
-            showAttackDialog(selectedNet);
+            if (position >= 0 && position < mockNetworks.length) {
+                showAttackDialog(mockNetworks[position]);
+            }
         });
     }
 
     private void startNetworkScan() {
-        mainProgressBar.setVisibility(ProgressBar.VISIBLE);
+        mainProgressBar.setVisibility(View.VISIBLE);
         networkNames.clear();
         adapter.notifyDataSetChanged();
         Toast.makeText(this, "جاري فحص الشبكات المحيطة...", Toast.LENGTH_SHORT).show();
 
         new Handler(Looper.getMainLooper()).postDelayed(() -> {
-            mainProgressBar.setVisibility(ProgressBar.GONE);
+            if (isFinishing() || isDestroyed()) return;
+            mainProgressBar.setVisibility(View.GONE);
             for (String[] net : mockNetworks) {
                 networkNames.add(net[0] + " | التشفير: " + net[2]);
             }
@@ -101,6 +104,7 @@ public class MainActivity extends AppCompatActivity {
         dialogLayout.setOrientation(LinearLayout.VERTICAL);
         dialogLayout.setBackgroundColor(Color.parseColor("#1A1A24"));
         dialogLayout.setPadding(40, 40, 40, 40);
+        dialogLayout.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
 
         TextView tvTarget = new TextView(this);
         tvTarget.setText("الهدف: " + network[0]);
@@ -132,7 +136,6 @@ public class MainActivity extends AppCompatActivity {
         AlertDialog dialog = new AlertDialog.Builder(this)
                 .setView(dialogLayout)
                 .create();
-        dialog.show();
 
         String targetPassword = network[3];
         String[] wordlist = {
@@ -143,6 +146,16 @@ public class MainActivity extends AppCompatActivity {
         final boolean[] isAttacking = {false};
         final Handler handler = new Handler(Looper.getMainLooper());
         final Runnable[] attackRunnable = new Runnable[1];
+
+        // إيقاف المحاكاة تلقائياً عند إغلاق النافذة لتجنب تسرب الذاكرة
+        dialog.setOnDismissListener(d -> {
+            isAttacking[0] = false;
+            if (attackRunnable[0] != null) {
+                handler.removeCallbacks(attackRunnable[0]);
+            }
+        });
+
+        dialog.show();
 
         btnStartAttack.setOnClickListener(v -> {
             if (!isAttacking[0]) {
@@ -156,7 +169,9 @@ public class MainActivity extends AppCompatActivity {
                 attackRunnable[0] = new Runnable() {
                     @Override
                     public void run() {
-                        if (index[0] < wordlist.length && isAttacking[0]) {
+                        if (!isAttacking[0]) return;
+
+                        if (index[0] < wordlist.length) {
                             String currentWord = wordlist[index[0]];
                             tvStatus.setText("جاري التجربة: " + currentWord);
                             attackProgress.setProgress(index[0] + 1);
@@ -171,7 +186,7 @@ public class MainActivity extends AppCompatActivity {
 
                             index[0]++;
                             handler.postDelayed(this, 400);
-                        } else if (isAttacking[0]) {
+                        } else {
                             isAttacking[0] = false;
                             tvStatus.setText("انتهت القائمة، لم يتم العثور على تطابق.");
                             btnStartAttack.setText("بدء اختبار التخمين");
